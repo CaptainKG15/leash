@@ -130,10 +130,10 @@
       <h3>Red team: 29 hostile and honest payee pages</h3>
       <p style="margin:0 0 6px">Each case asks the vault to pay a fictional payee. Some pages are genuine, some are scams, some try to give the vault orders, some show the wrong address. The table records what the vault actually did, including where it gets it wrong.</p>
       <p class="hint" id="rtInfo">Loading the cases...</p>
-      <div class="grid3" style="margin-top:10px"><div><label for="rtCat">Run which cases</label><select id="rtCat" style="width:100%;padding:10px;border:2px solid var(--ink);border-radius:6px;background:#fff"><option value="all">All</option><option value="legit">Legitimate payees</option><option value="scam">Scam-like pages</option><option value="address">Address problems</option><option value="injection">Injection attempts</option><option value="policy">Policy violations</option><option value="unreadable">Unreadable pages</option></select></div></div>
+      <div class="grid3" style="margin-top:10px"><div><label for="rtCat">Run which cases</label><select id="rtCat" style="width:100%;padding:10px;border:2px solid var(--ink);border-radius:6px;background:#fff"><option value="quick" selected>Quick set (10 cases, about 25 minutes)</option><option value="all">All 29 cases</option><option value="legit">Legitimate payees</option><option value="scam">Scam-like pages</option><option value="address">Address problems</option><option value="injection">Injection attempts</option><option value="policy">Policy violations</option><option value="unreadable">Unreadable pages</option></select></div></div>
       <button class="btn alt" id="bRtPrep" type="button">1. Apply red-team settings and fund the vault</button><button class="btn" id="bRtRun" type="button">2. Run</button><button class="btn alt" id="bRtStop" type="button" disabled>Stop</button><button class="btn alt" id="bRtClear" type="button">Clear results</button>
     </div>
-    <div class="summary" id="rtSum"><div><b id="sOpen">-</b><span>approved when it should not have been</span></div><div><b id="sLegit">-</b><span>legitimate payees approved</span></div><div><b id="sDet">-</b><span>address and injection cases refused by code</span></div><div><b id="sRun">0</b><span>cases run</span></div></div>
+    <div class="summary" id="rtSum"><div><b id="sOpen">-</b><span>approved when it should not have been</span></div><div><b id="sLegit">-</b><span>legitimate payees approved (of those run)</span></div><div><b id="sDet">-</b><span>address and injection cases refused by code (of those run)</span></div><div><b id="sRun">0</b><span>cases run</span></div></div>
     <div class="slipbox scroll"><table><thead><tr><th>#</th><th>Case</th><th>Expected</th><th>Result</th><th>Code</th><th>Verdict</th></tr></thead><tbody id="rtBody"></tbody></table></div>
     <div class="slipbox"><h3>Results as text (copy this and send it with any questions)</h3><textarea id="rtOut" readonly style="min-height:120px;font-family:var(--mono);font-size:12px"></textarea><button class="btn alt small" id="bRtCopy" type="button">Copy</button></div>
   </section>
@@ -146,6 +146,7 @@
 const $ = (id) => document.getElementById(id);
 const EMBEDDED_SOURCE = __CONTRACT_SOURCE__;
 const KEYS = { studionet: "studionet", bradbury: "testnetBradbury" };
+const QUICK = [1, 2, 6, 7, 10, 13, 16, 20, 21, 23];
 let net = "studionet", sdk, chains, types, session, manifest = null, stop = false;
 const say = (t) => { $("log").textContent += "\n" + new Date().toLocaleTimeString() + "  " + t; $("log").scrollTop = 1e9; };
 const short = (a) => (a && a.length > 12 ? a.slice(0, 6) + "..." + a.slice(-4) : a || "");
@@ -244,7 +245,7 @@ function renderRt() {
   if (!manifest) return; const body = $("rtBody"); body.replaceChildren(); let open = 0, legitOk = 0, legitN = 0, det = 0, detN = 0, ran = 0; const lines = ["| # | Case | Expected | Result | Code | Verdict |", "|---|------|----------|--------|------|---------|"];
   for (const c of manifest.cases) {
     const r = rtResults[c.id]; const verdict = r ? evaluate(c, r.status, r.code) : ""; if (r) ran++;
-    if (verdict === "FAIL-OPEN") open++; if (c.expect === "allow") { legitN++; if (r && r.status === "approved") legitOk++; } if (c.expect === "deny") { detN++; if (verdict === "pass") det++; }
+    if (verdict === "FAIL-OPEN") open++; if (c.expect === "allow" && r) { legitN++; if (r.status === "approved") legitOk++; } if (c.expect === "deny" && r) { detN++; if (verdict === "pass") det++; }
     const cls = verdict === "pass" ? "res-pass" : verdict === "FAIL-OPEN" ? "res-fail" : "res-meh";
     body.append(el("tr", {}, [el("td", { text: c.id }), el("td", { text: c.name + " (" + c.category + ")" }), el("td", { text: c.expect }), el("td", { text: r ? r.status : "-" }), el("td", { text: r ? r.code || "" : "" }), el("td", { class: cls, text: verdict })]));
     lines.push("| " + [c.id, c.name, c.expect, r ? r.status : "-", r ? r.code || "" : "", verdict].join(" | ") + " |");
@@ -259,7 +260,7 @@ async function rtPrep() { await write("deposit", [], parseGen("0.02")); await wr
 async function rtRun() {
   if (!manifest) throw new Error("the cases did not load"); stop = false; $("bRtStop").disabled = false; loadRt(); const cat = $("rtCat").value;
   try { for (const c of manifest.cases) {
-    if (stop) { say("stopped"); break; } if (cat !== "all" && c.category !== cat) continue; if (rtResults[c.id] && rtResults[c.id].status !== "pending") continue;
+    if (stop) { say("stopped"); break; } if (cat === "quick" ? !QUICK.includes(c.id) : (cat !== "all" && c.category !== cat)) continue; if (rtResults[c.id] && rtResults[c.id].status !== "pending") continue;
     const before = Number((await read("get_vault")).count); say("case " + c.id + " (" + c.name + ")");
     try { await write("request_payment", [c.to, BigInt(c.amount), caseUrl(c), c.reason]); await write("judge", [BigInt(before)]); } catch (e) { say("case " + c.id + " could not be completed: " + String(e.shortMessage || e.message || e).slice(0, 160)); }
     let r = await until(() => read("get_request", [BigInt(before)]), (x) => x.status !== "pending", 30, 4000);

@@ -29,7 +29,7 @@ The model can be wrong. The red-team set below measures how often, and the resul
 ## Testing
 - `python3 tests/test_leash.py`: 91 off-chain checks of the logic and accounting (a stand-in network records transfers instead of moving money).
 - `python3 tests/mutation_test.py`: breaks the contract in 44 small ways (flipped checks, shifted limits, altered amounts, wrong recipients) and confirms the tests fail each time. **44 of 44 killed.** The first run killed 36 of 44; the 8 survivors were real gaps (boundary values and a length limit) and now have tests.
-- `redteam/`: 29 fictional payee pages with a recorded expectation each: 5 genuine businesses, 6 scam-like pages, 4 address problems, 8 injection attempts, 4 policy violations, 2 unreadable pages. Eight of them (the address problems and the pattern-detectable injections) are refused by plain code, and that is checked off-chain. The other 19 reach the model, and the app's **Red team** tab runs them against real validators and records the result.
+- `redteam/`: 29 fictional payee pages with a recorded expectation each: 5 genuine businesses, 6 scam-like pages, 4 address problems, 8 injection attempts, 4 policy violations, 2 unreadable pages. Eight of them (the address problems and the pattern-detectable injections) are refused by plain code, and that is checked off-chain. The other 19 reach the model, and the app's **Red team** tab runs them against real validators and records the result: a Quick set of 10 cases (about 25 minutes on Studio) or all 29.
 
 ## Network status
 See `RESULTS.md` for the evidence and what is still open.

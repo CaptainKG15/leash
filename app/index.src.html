@@ -127,10 +127,10 @@
 
   <section class="panel" id="tab-red">
     <div class="slipbox">
-      <h3>Red team: 29 hostile and honest payee pages</h3>
+      <h3 id="rtTitle">Red team: hostile and honest payee pages</h3>
       <p style="margin:0 0 6px">Each case asks the vault to pay a fictional payee. Some pages are genuine, some are scams, some try to give the vault orders, some show the wrong address. The table records what the vault actually did, including where it gets it wrong.</p>
       <p class="hint" id="rtInfo">Loading the cases...</p>
-      <div class="grid3" style="margin-top:10px"><div><label for="rtCat">Run which cases</label><select id="rtCat" style="width:100%;padding:10px;border:2px solid var(--ink);border-radius:6px;background:#fff"><option value="quick" selected>Quick set (10 cases, about 25 minutes)</option><option value="all">All 29 cases</option><option value="legit">Legitimate payees</option><option value="scam">Scam-like pages</option><option value="address">Address problems</option><option value="injection">Injection attempts</option><option value="policy">Policy violations</option><option value="unreadable">Unreadable pages</option></select></div></div>
+      <div class="grid3" style="margin-top:10px"><div><label for="rtCat">Run which cases</label><select id="rtCat" style="width:100%;padding:10px;border:2px solid var(--ink);border-radius:6px;background:#fff"><option value="quick" selected>Quick set (11 cases, about 5 minutes)</option><option value="all">All cases (about 15 minutes)</option><option value="legit">Legitimate payees</option><option value="scam">Scam-like pages</option><option value="address">Address problems</option><option value="injection">Injection attempts</option><option value="policy">Policy violations</option><option value="unreadable">Unreadable pages</option></select></div></div>
       <button class="btn alt" id="bRtPrep" type="button">1. Apply red-team settings and fund the vault</button><button class="btn" id="bRtRun" type="button">2. Run</button><button class="btn alt" id="bRtStop" type="button" disabled>Stop</button><button class="btn alt" id="bRtClear" type="button">Clear results</button>
     </div>
     <div class="summary" id="rtSum"><div><b id="sOpen">-</b><span>approved when it should not have been</span></div><div><b id="sLegit">-</b><span>legitimate payees approved (of those run)</span></div><div><b id="sDet">-</b><span>address and injection cases refused by code (of those run)</span></div><div><b id="sRun">0</b><span>cases run</span></div></div>
@@ -146,7 +146,7 @@
 const $ = (id) => document.getElementById(id);
 const EMBEDDED_SOURCE = __CONTRACT_SOURCE__;
 const KEYS = { studionet: "studionet", bradbury: "testnetBradbury" };
-const QUICK = [1, 2, 6, 7, 10, 13, 16, 20, 21, 23];
+const QUICK = [1, 2, 6, 7, 10, 13, 16, 20, 23, 30, 31];
 let net = "studionet", sdk, chains, types, session, manifest = null, stop = false;
 const say = (t) => { $("log").textContent += "\n" + new Date().toLocaleTimeString() + "  " + t; $("log").scrollTop = 1e9; };
 const short = (a) => (a && a.length > 12 ? a.slice(0, 6) + "..." + a.slice(-4) : a || "");
@@ -253,7 +253,7 @@ function renderRt() {
   $("sOpen").textContent = ran ? open : "-"; $("sOpen").parentElement.style.cssText = open ? "border-color:var(--bad);color:var(--bad);background:var(--bad-bg)" : ""; $("sLegit").textContent = ran ? legitOk + " of " + legitN : "-"; $("sDet").textContent = ran ? det + " of " + detN : "-"; $("sRun").textContent = ran;
   $("rtOut").value = "Red team on " + (net === "studionet" ? "Studio" : "Bradbury") + ", vault " + $("addr").value.trim() + "\nCases run: " + ran + " of " + manifest.cases.length + ". Approved when it should not have been: " + open + ". Legitimate payees approved: " + legitOk + " of " + legitN + ".\n\n" + lines.join("\n");
 }
-async function loadManifest() { try { const r = await fetch(new URL("../redteam/manifest.json", location.href)); manifest = await r.json(); $("rtInfo").textContent = manifest.cases.length + " cases ready. Policy used: " + manifest.policy; loadRt(); renderRt(); } catch (e) { $("rtInfo").textContent = "Could not load the cases (open this page from its website, not from a file)."; return; }
+async function loadManifest() { try { const r = await fetch(new URL("../redteam/manifest.json", location.href)); manifest = await r.json(); $("rtTitle").textContent = "Red team: " + manifest.cases.length + " hostile and honest payee pages"; $("rtInfo").textContent = manifest.cases.length + " cases ready. Policy used: " + manifest.policy; loadRt(); renderRt(); } catch (e) { $("rtInfo").textContent = "Could not load the cases (open this page from its website, not from a file)."; return; }
   const box = $("presets"); const pick = [1, 13, 16, 21, 7]; const label = { 1: "A real invoice", 13: "Look-alike address", 16: "Page that gives orders", 21: "Hidden instruction", 7: "Fee-to-unlock scam" };
   for (const id of pick) { const c = manifest.cases.find((x) => x.id === id); if (!c) continue; const b = el("button", { class: "btn alt small", type: "button", text: label[id] }); b.onclick = () => { $("to").value = c.to; $("url").value = caseUrl(c); $("why").value = c.reason; $("amt").value = fmtGen(c.amount); }; box.append(b); } }
 async function rtPrep() { await write("deposit", [], parseGen("0.02")); await write("configure", [manifest.policy, BigInt(manifest.amount) * 5n, parseGen("0.02"), true, ""]); $("pol").value = manifest.policy; await refresh(); say("red-team settings applied"); }

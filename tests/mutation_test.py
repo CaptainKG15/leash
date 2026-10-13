@@ -52,6 +52,14 @@ MUTANTS = [
     ("recipient not lowercased", "to=to.lower()", "to=to"),
     ("withdraw sends to the wrong place", "Payee(self.owner)", "Payee(Address(\"0x\" + \"f\" * 40))"),
     ("payment sent to the wrong place", "Payee(Address(r.to))", "Payee(Address(\"0x\" + \"f\" * 40))"),
+    ("pattern: marking a payee as approved", r"\s+as\s+(?:allowed|approved|safe|verified|trusted)", r"\s+asX\s+(?:allowed|approved|safe|verified|trusted)"),
+    ("pattern: pre-approval claims", r"\bpre-?\s?(?:approved|authori[sz]ed|verified)", r"\bprX-?\s?(?:approved|authori[sz]ed|verified)"),
+    ("pattern: skip the checks", r"\bskip\s+(?:the\s+)?(?:checks?", r"\bskiX\s+(?:the\s+)?(?:checks?"),
+    ("pattern: message from the owner", r"\s+from\s+(?:the\s+)?(?:vault\s+)?(?:owner|operator|administrator|admin)\b", r"\s+fromX\s+(?:the\s+)?(?:vault\s+)?(?:owner|operator|administrator|admin)\b"),
+    ("pattern: the owner has approved it", r"(?:has\s+)?(?:approved|authori[sz]ed|verified)", r"(?:hasX\s+)?(?:approved|authori[sz]ed|verified)"),
+    ("pattern: do not mention the note", r"\bdo\s+not\s+(?:mention|reveal)", r"\bdoX\s+not\s+(?:mention|reveal)"),
+    ("pattern: approve this payment", r"\b(?:approve|allow)\s+this\s+(?:payment|payee|transfer)", r"\b(?:approvX|allowX)\s+this\s+(?:payment|payee|transfer)"),
+    ("prompt: authority claims are red flags", "red flags of fraud", "red flags"),
     ("payment amount altered", "emit_transfer(value=u256(a))", "emit_transfer(value=u256(a + 1))"),
 ]
 
@@ -60,6 +68,7 @@ def run(contract_path):
     try:
         os.makedirs(os.path.join(tmp, "contracts")); shutil.copy(contract_path, os.path.join(tmp, "contracts", "leash.py"))
         shutil.copytree(HERE, os.path.join(tmp, "tests"), ignore=shutil.ignore_patterns("__pycache__", "attacks"))
+        shutil.copytree(os.path.join(HERE, "..", "redteam"), os.path.join(tmp, "redteam"), ignore=shutil.ignore_patterns("__pycache__"))
         return subprocess.run([sys.executable, os.path.join(tmp, "tests", "test_leash.py")], capture_output=True, text=True, timeout=120).returncode
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

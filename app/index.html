@@ -176,7 +176,10 @@ async function getSession() {
     const account = pk ? sdk.createAccount(pk) : sdk.createAccount(); address = account.address; client = sdk.createClient({ chain: chain(), account });
   } else {
     if (!window.ethereum) throw new Error("no browser wallet found");
-    address = (await window.ethereum.request({ method: "eth_requestAccounts" }))[0]; client = sdk.createClient({ chain: chain(), account: address }); try { if (client.connect) await client.connect(KEYS[net]); } catch (e) {}
+    address = (await window.ethereum.request({ method: "eth_requestAccounts" }))[0];
+    try { await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: "0x107d" }] }); }
+    catch (e) { await window.ethereum.request({ method: "wallet_addEthereumChain", params: [{ chainId: "0x107d", chainName: "GenLayer Bradbury", rpcUrls: ["https://rpc-bradbury.genlayer.com"], nativeCurrency: { name: "GEN", symbol: "GEN", decimals: 18 }, blockExplorerUrls: ["https://explorer-bradbury.genlayer.com"] }] }); }
+    client = sdk.createClient({ chain: chain(), account: address }); try { if (client.connect) await client.connect(KEYS[net]); } catch (e) {}
   }
   session = { net, client, address }; $("who").textContent = (net === "studionet" ? "Throwaway Studio key: " : "Wallet: ") + address; return session;
 }
@@ -220,6 +223,7 @@ async function loadReqs(n) {
 function unitOf(id) { return parseGen($(id).value); }
 async function deployVault() {
   const { client } = await getSession(); say("deploying the vault (" + EMBEDDED_SOURCE.length + " characters)...");
+  try { if (client.initializeConsensusSmartContract) await client.initializeConsensusSmartContract(); } catch (e) { /* not needed on every network */ }
   let hash; try { hash = await client.deployContract({ code: EMBEDDED_SOURCE, args: [] }); } catch (e) { if (/reject|denied/i.test(String(e.message))) throw e; hash = await client.deployContract({ code: new TextEncoder().encode(EMBEDDED_SOURCE), args: [] }); }
   say("submitted " + hash.slice(0, 12) + "... waiting"); const rc = await client.waitForTransactionReceipt({ hash, status: ACCEPTED(), retries: 200, interval: 3000 });
   const pick = (...v) => v.find((x) => typeof x === "string" && /^0x[0-9a-fA-F]{40}$/.test(x));

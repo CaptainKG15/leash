@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Payout test: deploy to Bradbury (built-in contract)</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --text:#16181d; --muted:#5d6573; --line:#e1e4ea; --accent:#2f5bea; --ok-bg:#e5f5ec; --bad-bg:#fbe7e5; --info-bg:#e8eefc; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0f1115; --card:#181b21; --text:#eceef2; --muted:#9aa3b2; --line:#2a2f39; --accent:#7d9bff; --ok-bg:#12301f; --bad-bg:#3a1815; --info-bg:#1b2745; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  .wrap { max-width:760px; margin:0 auto; padding:24px 16px 64px; }
+  h1 { margin:0 0 4px; font-size:26px; } p.muted, .muted { color:var(--muted); font-size:13px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; margin:16px 0; }
+  button { padding:10px 16px; border:0; border-radius:8px; background:var(--accent); color:#fff; font:inherit; font-weight:600; cursor:pointer; margin-right:8px; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size:13px; word-break:break-all; }
+  .notice { padding:10px 12px; border-radius:8px; margin-top:12px; background:var(--info-bg); }
+  .ok { background:var(--ok-bg); } .bad { background:var(--bad-bg); }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Deploy the payout test to Bradbury (contract built in)</h1>
+  <p class="muted">Deploys the contract that is built into this page. It does not load any file, so it works when opened directly. You approve the transaction in your wallet. You approve the transaction in the wallet. No private key is entered here.</p>
+
+  <div class="card">
+    <strong>1. Contract source</strong>
+    <div id="source" class="muted" style="margin-top:8px">Loading...</div>
+  </div>
+
+  <div class="card">
+    <strong>2. Connect your wallet</strong>
+    <p class="muted">Needs a wallet such as MetaMask and some Bradbury testnet GEN for gas.</p>
+    <button id="connect">Connect wallet</button>
+    <div id="wallet" class="muted" style="margin-top:8px"></div>
+  </div>
+
+  <div class="card">
+    <strong>3. Deploy</strong>
+    <p class="muted">Takes a minute or two while validators reach consensus on the deployment.</p>
+    <button id="deploy" disabled>Deploy to Bradbury</button>
+    <div id="out" class="notice" style="display:none"></div>
+  </div>
+</div>
+
+<script type="module">
+const BRADBURY = { chainIdHex: "0x107d", name: "GenLayer Bradbury", rpc: "https://rpc-bradbury.genlayer.com",
+                   explorer: "https://explorer-bradbury.genlayer.com" };
+const $ = (id) => document.getElementById(id);
+const EMBEDDED_SOURCE = "# v0.2.16\n# { \"Depends\": \"py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6\" }\nfrom genlayer import *\nimport typing\n\n\n@gl.evm.contract_interface\nclass Payee:\n  class View:\n    pass\n\n  class Write:\n    pass\n\n\nclass PayTest(gl.Contract):\n  owner: Address\n  has_owner: bool\n  deposited: u256\n  paid: u256\n\n  def __init__(self):\n    self.owner = gl.message.sender_address\n    self.has_owner = False\n    self.deposited = u256(0)\n    self.paid = u256(0)\n\n  @gl.public.write.payable\n  def deposit(self) -> None:\n    if not self.has_owner:\n      self.owner, self.has_owner = gl.message.sender_address, True\n    self.deposited = u256(int(self.deposited) + int(gl.message.value))\n\n  @gl.public.write\n  def pay_out(self, to: str, amount: int) -> None:\n    if gl.message.sender_address != self.owner:\n      raise gl.vm.UserError(\"[EXPECTED] only the owner can pay out\")\n    if amount <= 0 or amount > int(self.balance):\n      raise gl.vm.UserError(\"[EXPECTED] bad amount\")\n    Payee(Address(to)).emit_transfer(value=u256(amount))\n    self.paid = u256(int(self.paid) + amount)\n\n  @gl.public.view\n  def info(self) -> typing.Any:\n    return {\"balance\": int(self.balance), \"deposited\": int(self.deposited), \"paid\": int(self.paid), \"owner\": self.owner.as_hex}\n";
+let sdk, chains, types, code = "", account = null;
+
+function out(text, kind, link) {
+  const o = $("out"); o.style.display = ""; o.className = "notice " + (kind || "");
+  o.textContent = text;
+  if (link) { o.append(document.createElement("br")); const a = document.createElement("a"); a.href = link; a.textContent = link; a.target = "_blank"; a.rel = "noopener noreferrer"; o.append(a); }
+}
+
+async function loadSdk() {
+  if (sdk) return;
+  sdk = await import("https://esm.sh/genlayer-js");
+  chains = await import("https://esm.sh/genlayer-js/chains");
+  try { types = await import("https://esm.sh/genlayer-js/types"); } catch (e) { types = null; }
+}
+
+async function sha256(text) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function loadSource() {
+  try {
+    code = EMBEDDED_SOURCE;
+    const s = $("source"); s.replaceChildren();
+    s.append("Built-in contract (same as contracts/pay_test.py), " + code.length + " characters. SHA-256 of the source:");
+    s.append(document.createElement("br"));
+    const h = document.createElement("span"); h.className = "mono"; h.textContent = await sha256(code); s.append(h);
+  } catch (e) { $("source").textContent = "Could not load the contract source: " + e.message; }
+}
+
+async function connect() {
+  try {
+    if (!window.ethereum) throw new Error("No browser wallet found. Install MetaMask and reload.");
+    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+    account = accounts[0];
+    try {
+      await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: BRADBURY.chainIdHex }] });
+    } catch (e) {
+      await window.ethereum.request({ method: "wallet_addEthereumChain", params: [{
+        chainId: BRADBURY.chainIdHex, chainName: BRADBURY.name, rpcUrls: [BRADBURY.rpc],
+        nativeCurrency: { name: "GEN", symbol: "GEN", decimals: 18 }, blockExplorerUrls: [BRADBURY.explorer] }] });
+    }
+    $("wallet").textContent = "Connected: " + account;
+    $("deploy").disabled = !code;
+  } catch (e) { out(String(e.shortMessage || e.message || e), "bad"); }
+}
+
+async function deploy() {
+  $("deploy").disabled = true;
+  try {
+    out("Loading the GenLayer SDK...", "");
+    await loadSdk();
+    const chain = chains.testnetBradbury;
+    if (!chain) throw new Error("This SDK build has no Bradbury chain.");
+    const client = sdk.createClient({ chain, account });
+    try { if (client.connect) await client.connect("testnetBradbury"); } catch (e) { console.warn(e); }
+    try { if (client.initializeConsensusSmartContract) await client.initializeConsensusSmartContract(); } catch (e) { console.warn(e); }
+
+    out("Approve the transaction in your wallet...", "");
+    let hash;
+    try { hash = await client.deployContract({ code, args: [] }); }
+    catch (e) {
+      if (/reject|denied/i.test(String(e.message))) throw e;
+      hash = await client.deployContract({ code: new TextEncoder().encode(code), args: [] });
+    }
+    out("Submitted. Waiting for validators to accept the deployment.\nTransaction: " + hash, "");
+
+    const accepted = (types && types.TransactionStatus && types.TransactionStatus.ACCEPTED) || "ACCEPTED";
+    const receipt = await client.waitForTransactionReceipt({ hash, status: accepted, retries: 200, interval: 3000 });
+    const pick = (...vals) => vals.find((v) => typeof v === "string" && /^0x[0-9a-fA-F]{40}$/.test(v));
+    const addr = pick(
+      receipt && receipt.data && receipt.data.contract_address,
+      receipt && receipt.txDataDecoded && receipt.txDataDecoded.contractAddress,
+      receipt && receipt.to_address, receipt && receipt.recipient, receipt && receipt.to,
+      receipt && receipt.contract_address
+    );
+    const exec = receipt && receipt.consensus_data && receipt.consensus_data.leader_receipt && receipt.consensus_data.leader_receipt[0] && receipt.consensus_data.leader_receipt[0].execution_result;
+    if (!addr) throw new Error("The deployment was accepted but this page could not read the contract address. Open the transaction on the explorer and copy the Deployed contract address: " + BRADBURY.explorer + "/tx/" + hash);
+    if (exec && exec !== "SUCCESS") throw new Error("Deployment execution result was " + exec + ". Transaction: " + hash);
+    out("Deployed.\nContract address: " + addr + "\nDeploy transaction: " + hash + "\nExplorer:", "ok", BRADBURY.explorer + "/address/" + addr);
+  } catch (e) {
+    out(String(e.shortMessage || e.message || e), "bad");
+    $("deploy").disabled = false;
+  }
+}
+
+$("connect").onclick = connect;
+$("deploy").onclick = deploy;
+loadSource();
+</script>
+</body>
+</html>

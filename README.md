@@ -34,7 +34,7 @@ The model can be wrong. The red-team set below measures how often, and the resul
 ## Network status
 See `RESULTS.md` for the evidence and what is still open.
 - **Studio:** the payout path is verified by balances (the vault dropped and the recipient received the exact amount).
-- **Bradbury:** deposits work. Whether a queued payout executes there was still being checked when this was written. Nothing in this project claims it until it has been seen.
+- **Bradbury:** the same payout path is verified with the payout test contract: a queued payout executed after finalization, about 40 minutes at most after approval (the recipient in that test was the paying wallet, so see the caveat in `RESULTS.md`). The Leash vault itself has not yet been run on Bradbury.
 
 ## Honest limits
 - The judgement is a model's reading of a page at one moment. Pages can look different to validators than to a person, and a convincing scam can still pass. The red-team table shows what happened in testing.
@@ -44,7 +44,7 @@ See `RESULTS.md` for the evidence and what is still open.
 - Pages are read as text; the model sees the first 6,000 characters, though the address and injection checks run on the whole page.
 - Anyone can deposit; only the owner can withdraw or change the rules. There is no rate limit on requests.
 - The owner is trusted. There is no multi-signature, no audit, and no recovery if the owner key is lost.
-- Payments are not instant: money moves after finalization, which can take minutes.
+- Payments are not instant: money moves after finalization, about a minute and a half on Studio and up to about 40 minutes on Bradbury in testing.
 
 ## Run it
 1. Host the folder on GitHub Pages, then open `app/index.html`.
